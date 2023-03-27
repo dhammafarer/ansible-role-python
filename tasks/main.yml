@@ -1,0 +1,59 @@
+---
+# tasks file for python
+- name: Download tar for version {{ python_version }}.
+  ansible.builtin.get_url:
+    url: "{{ base_url }}/{{ python_version }}/Python-{{ python_version }}.tgz"
+    dest: "{{ download_dir }}"
+    mode: "0644"
+
+- name: Unpack the archive.
+  ansible.builtin.unarchive:
+    src: "{{ download_dir }}/Python-{{ python_version }}.tgz"
+    dest: "{{ download_dir }}"
+    remote_src: true
+
+- name: Ensure required build tools are installed.
+  become: true
+  ansible.builtin.apt:
+    name: "{{ build_tools }}"
+    state: present
+
+- name: Run configure.
+  ansible.builtin.command:
+    cmd: "./configure --enable-optimizations"
+    chdir: "{{ download_dir }}/Python-{{ python_version }}"
+    creates: Makefile
+
+- name: Run make.
+  ansible.builtin.command:
+    cmd: "make -j {{ ansible_processor_nproc }}"
+    chdir: "{{ download_dir }}/Python-{{ python_version }}"
+  changed_when: true
+
+- name: Run make install.
+  become: true
+  ansible.builtin.command:
+    cmd: "make altinstall"
+    chdir: "{{ download_dir }}/Python-{{ python_version }}"
+    creates: /usr/local/bin/python{{  python_version | split('.') | slice(2) | first | join('.') }}
+
+- name: Make this version of python default.
+  become: true
+  ansible.builtin.file:
+    src: /usr/local/bin/python{{  python_version | split('.') | slice(2) | first | join('.') }}
+    dest: /usr/local/bin/python
+    owner: root
+    group: root
+    state: link
+
+- name: Confirm that default python version is {{ python_version }}.
+  block:
+    - name: Retrieve python version.
+      ansible.builtin.command:
+        cmd: "python -V"
+      changed_when: false
+      register: version
+
+    - name: Assert python version.
+      ansible.builtin.assert:
+        that: version.stdout == "Python {{ python_version }}"
