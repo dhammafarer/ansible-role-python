@@ -9,3 +9,4 @@ build_tools:
   - libssl-dev
   - libreadline-dev
   - libffi-dev
+  - libbz2-dev
